@@ -1,0 +1,619 @@
+basePath: /api/v1
+definitions:
+  github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest:
+    properties:
+      content:
+        example: PostgreSQL is a powerful database...
+        type: string
+      doc_type:
+        example: tutorial
+        type: string
+      metadata:
+        type: object
+      source_url:
+        example: https://example.com/docs
+        type: string
+      title:
+        example: PostgreSQL Best Practices
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum:
+    properties:
+      modules:
+        items:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule'
+        type: array
+      title:
+        type: string
+    required:
+    - modules
+    - title
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      topics:
+        items:
+          type: string
+        type: array
+    required:
+    - name
+    - topics
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.Document:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      doc_type:
+        type: string
+      id:
+        type: integer
+      metadata:
+        type: object
+      source_url:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig:
+    properties:
+      chunk_overlap:
+        type: integer
+      chunk_size:
+        type: integer
+      normalize:
+        type: boolean
+      search_engine:
+        description: duckduckgo, brave
+        type: string
+      search_results_per_topic:
+        type: integer
+      web_search_enabled:
+        type: boolean
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse:
+    properties:
+      documents:
+        items:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        type: array
+      pipeline_run:
+        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun'
+      total_chunks:
+        type: integer
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun:
+    properties:
+      config:
+        type: object
+      created_at:
+        type: string
+      current_stage:
+        description: parse, search, normalize, chunk, embed, store
+        type: string
+      curriculum_title:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: integer
+      input_data:
+        type: object
+      progress:
+        description: 0-100
+        type: integer
+      status:
+        description: pending, processing, completed, failed
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse:
+    properties:
+      created_at:
+        type: string
+      current_stage:
+        type: string
+      error_message:
+        type: string
+      id:
+        type: integer
+      progress:
+        type: integer
+      stages:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult:
+    properties:
+      document:
+        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+      score:
+        type: number
+      snippet:
+        type: string
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest:
+    properties:
+      config:
+        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig'
+      curriculum:
+        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum'
+    required:
+    - curriculum
+    type: object
+  github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest:
+    properties:
+      content:
+        type: string
+      doc_type:
+        type: string
+      metadata:
+        type: object
+      source_url:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.GenerateRequest:
+    properties:
+      include_citations:
+        type: boolean
+      limit:
+        type: integer
+      min_score:
+        type: number
+      prompt:
+        type: string
+    type: object
+  internal_handlers.GenerateResponse:
+    properties:
+      generated_text:
+        type: string
+      sources:
+        items:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult'
+        type: array
+    type: object
+host: localhost:8000
+info:
+  contact:
+    email: support@documenthub.io
+    name: API Support
+    url: https://github.com/kavishankarks/document-hub
+  description: A high-performance documentation platform with intelligent search using
+    full-text and semantic vector search.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Document Hub API
+  version: "1.0"
+paths:
+  /api/v1/pipeline/{id}/cancel:
+    post:
+      description: Cancels a running pipeline execution
+      parameters:
+      - description: Pipeline Run ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Cancel pipeline
+      tags:
+      - pipeline
+  /api/v1/pipeline/{id}/results:
+    get:
+      description: Retrieves the documents and chunks created by a pipeline run
+      parameters:
+      - description: Pipeline Run ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get pipeline results
+      tags:
+      - pipeline
+  /api/v1/pipeline/{id}/status:
+    get:
+      description: Retrieves the current status and progress of a pipeline run
+      parameters:
+      - description: Pipeline Run ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get pipeline status
+      tags:
+      - pipeline
+  /api/v1/pipeline/start:
+    post:
+      consumes:
+      - application/json
+      description: Starts a new pipeline to process course curriculum with web search,
+        normalization, chunking, and embedding
+      parameters:
+      - description: Pipeline configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start a new RAG pipeline
+      tags:
+      - pipeline
+  /api/v1/pipelines:
+    get:
+      description: Retrieves a paginated list of all pipeline runs
+      parameters:
+      - default: 0
+        description: Number of records to skip
+        in: query
+        name: skip
+        type: integer
+      - default: 20
+        description: Maximum number of records to return
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by status (pending, processing, completed, failed)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List pipeline runs
+      tags:
+      - pipeline
+  /documents:
+    get:
+      parameters:
+      - description: Skip
+        in: query
+        name: skip
+        type: integer
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List documents
+      tags:
+      - documents
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Document
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create document
+      tags:
+      - documents
+  /documents/{id}:
+    delete:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete document
+      tags:
+      - documents
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get document by ID
+      tags:
+      - documents
+    put:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updates
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update document
+      tags:
+      - documents
+  /documents/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads a file (PDF, Doc, Word, PPT, HTML), converts it to markdown,
+        normalizes, chunks, embeds, and stores it.
+      parameters:
+      - description: Document file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Upload and process a document
+      tags:
+      - documents
+  /generate:
+    post:
+      consumes:
+      - application/json
+      description: Generates content based on the provided prompt and retrieved context
+        from documents
+      parameters:
+      - description: Generation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.GenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.GenerateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Generate content using LLM
+      tags:
+      - generation
+  /search:
+    get:
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      - default: hybrid
+        description: 'Search type: fulltext, semantic, hybrid'
+        in: query
+        name: type
+        type: string
+      - default: 10
+        description: Result limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0.3
+        description: Minimum score threshold (0.0-1.0)
+        format: float64
+        in: query
+        name: min_score
+        type: number
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search documents
+      tags:
+      - search
+schemes:
+- http
+- https
+swagger: "2.0"
