@@ -1,25 +1,25 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/kavishankarks/document-hub/go-api/internal/embedding_client"
 	"github.com/kavishankarks/document-hub/go-api/internal/models"
-	"github.com/pgvector/pgvector-go"
-	"gorm.io/gorm"
+	"github.com/kavishankarks/document-hub/go-api/internal/vector"
 )
 
 type Handler struct {
-	db              *gorm.DB
 	embeddingClient *embedding_client.EmbeddingClient
+	milvusClient    *vector.MilvusClient
 }
 
-func NewHandler(db *gorm.DB) *Handler {
+func NewHandler(milvusClient *vector.MilvusClient) *Handler {
 	return &Handler{
-		db:              db,
 		embeddingClient: embedding_client.NewClient(),
+		milvusClient:    milvusClient,
 	}
 }
 
@@ -40,39 +40,36 @@ func (h *Handler) CreateDocument(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check if document with same title already exists
-	var existingDoc models.Document
-	if err := h.db.Where("title = ?", req.Title).First(&existingDoc).Error; err == nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-			"error":       "Document with this title already exists",
-			"existing_id": existingDoc.ID,
-			"hint":        "Use PUT /api/v1/documents/:id to update the existing document",
-		})
-	}
+	// Create document in Milvus
+	// Note: MilvusClient.CreateDocument checks for duplicates by title (if implemented)
+	// or we rely on unique constraint if any.
+	// Our CreateDocument implementation does check for existing title.
 
-	// Create document
-	doc := models.Document{
+	metadataBytes, _ := json.Marshal(req.Metadata)
+
+	milvusDoc := &vector.Document{
 		Title:     req.Title,
 		Content:   req.Content,
 		SourceURL: req.SourceURL,
 		DocType:   req.DocType,
-		Metadata:  req.Metadata,
+		Metadata:  string(metadataBytes),
 	}
 
-	// Start transaction
-	tx := h.db.Begin()
-
-	if err := tx.Create(&doc).Error; err != nil {
-		tx.Rollback()
+	docID, err := h.milvusClient.CreateDocument(milvusDoc)
+	if err != nil {
+		// Check if error is duplicate
+		// This depends on how CreateDocument returns error.
+		// Assuming generic error for now, but we could improve this.
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create document",
+			"error": fmt.Sprintf("Failed to create document: %v", err),
 		})
 	}
 
 	// Chunk the content
 	chunks, err := h.embeddingClient.ChunkText(req.Content, 500)
 	if err != nil {
-		tx.Rollback()
+		// Try to cleanup
+		h.milvusClient.DeleteDocument(docID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to chunk text: %v", err),
 		})
@@ -81,31 +78,42 @@ func (h *Handler) CreateDocument(c *fiber.Ctx) error {
 	// Get embeddings for all chunks
 	embeddings, err := h.embeddingClient.GetEmbeddings(chunks)
 	if err != nil {
-		tx.Rollback()
+		h.milvusClient.DeleteDocument(docID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to generate embeddings: %v", err),
 		})
 	}
 
-	// Create chunk records
+	// Create chunk records for Milvus
+	var milvusChunks []vector.Chunk
 	for i, chunk := range chunks {
-		chunkRecord := models.DocumentChunk{
-			DocumentID: doc.ID,
+		milvusChunks = append(milvusChunks, vector.Chunk{
+			DocumentID: docID,
+			ChunkIndex: int64(i),
 			ChunkText:  chunk,
-			ChunkIndex: i,
-			Embedding:  pgvector.NewVector(embeddings[i]),
-		}
-		if err := tx.Create(&chunkRecord).Error; err != nil {
-			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to create chunk",
-			})
-		}
+			Embedding:  embeddings[i],
+		})
 	}
 
-	tx.Commit()
+	// Store chunks in Milvus
+	if err := h.milvusClient.AddChunks(milvusChunks); err != nil {
+		h.milvusClient.DeleteDocument(docID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to store chunks in vector DB: %v", err),
+		})
+	}
 
-	return c.Status(fiber.StatusCreated).JSON(doc)
+	// Construct response
+	respDoc := models.Document{
+		ID:        uint(docID),
+		Title:     req.Title,
+		Content:   req.Content,
+		SourceURL: req.SourceURL,
+		DocType:   req.DocType,
+		Metadata:  req.Metadata,
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(respDoc)
 }
 
 // GetDocument godoc
@@ -123,16 +131,23 @@ func (h *Handler) GetDocument(c *fiber.Ctx) error {
 		})
 	}
 
-	var doc models.Document
-	if err := h.db.Preload("Chunks").First(&doc, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Document not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to retrieve document",
+	milvusDoc, err := h.milvusClient.GetDocument(int64(id))
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Document not found",
 		})
+	}
+
+	var metadata map[string]interface{}
+	json.Unmarshal([]byte(milvusDoc.Metadata), &metadata)
+
+	doc := models.Document{
+		ID:        uint(milvusDoc.ID),
+		Title:     milvusDoc.Title,
+		Content:   milvusDoc.Content,
+		SourceURL: milvusDoc.SourceURL,
+		DocType:   milvusDoc.DocType,
+		Metadata:  metadata,
 	}
 
 	return c.JSON(doc)
@@ -153,14 +168,25 @@ func (h *Handler) ListDocuments(c *fiber.Ctx) error {
 		limit = 100
 	}
 
-	var documents []models.Document
-	var total int64
-
-	h.db.Model(&models.Document{}).Count(&total)
-
-	if err := h.db.Offset(skip).Limit(limit).Find(&documents).Error; err != nil {
+	milvusDocs, total, err := h.milvusClient.ListDocuments(limit, skip)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to retrieve documents",
+			"error": fmt.Sprintf("Failed to retrieve documents: %v", err),
+		})
+	}
+
+	var documents []models.Document
+	for _, md := range milvusDocs {
+		var metadata map[string]interface{}
+		json.Unmarshal([]byte(md.Metadata), &metadata)
+
+		documents = append(documents, models.Document{
+			ID:        uint(md.ID),
+			Title:     md.Title,
+			Content:   md.Content,
+			SourceURL: md.SourceURL,
+			DocType:   md.DocType,
+			Metadata:  metadata,
 		})
 	}
 
@@ -181,58 +207,9 @@ func (h *Handler) ListDocuments(c *fiber.Ctx) error {
 // @Failure 400,404,500 {object} map[string]string
 // @Router /documents/{id} [put]
 func (h *Handler) UpdateDocument(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid document ID",
-		})
-	}
-
-	var req models.UpdateDocumentRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	var doc models.Document
-	if err := h.db.First(&doc, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Document not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to retrieve document",
-		})
-	}
-
-	// Update fields
-	if req.Title != nil {
-		doc.Title = *req.Title
-	}
-	if req.Content != nil {
-		doc.Content = *req.Content
-		// If content changed, re-chunk and re-embed
-		// This is a simplified version - in production you'd want more sophisticated logic
-	}
-	if req.SourceURL != nil {
-		doc.SourceURL = *req.SourceURL
-	}
-	if req.DocType != nil {
-		doc.DocType = *req.DocType
-	}
-	if len(req.Metadata) > 0 {
-		doc.Metadata = req.Metadata
-	}
-
-	if err := h.db.Save(&doc).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update document",
-		})
-	}
-
-	return c.JSON(doc)
+	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
+		"error": "Update document is not supported with Milvus storage yet",
+	})
 }
 
 // DeleteDocument godoc
@@ -250,16 +227,9 @@ func (h *Handler) DeleteDocument(c *fiber.Ctx) error {
 		})
 	}
 
-	result := h.db.Delete(&models.Document{}, id)
-	if result.Error != nil {
+	if err := h.milvusClient.DeleteDocument(int64(id)); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to delete document",
-		})
-	}
-
-	if result.RowsAffected == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Document not found",
+			"error": fmt.Sprintf("Failed to delete document: %v", err),
 		})
 	}
 

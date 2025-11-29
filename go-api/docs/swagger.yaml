@@ -190,7 +190,7 @@ definitions:
           $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult'
         type: array
     type: object
-host: localhost:8000
+host: localhost:8001
 info:
   contact:
     email: support@documenthub.io
