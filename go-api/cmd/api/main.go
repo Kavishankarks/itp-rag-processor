@@ -10,12 +10,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/joho/godotenv"
-	_ "github.com/kavishankarks/document-hub/go-api/docs"
-	"github.com/kavishankarks/document-hub/go-api/internal/database"
-	"github.com/kavishankarks/document-hub/go-api/internal/embedding_client"
-	"github.com/kavishankarks/document-hub/go-api/internal/handlers"
-	"github.com/kavishankarks/document-hub/go-api/internal/llm"
-	"github.com/kavishankarks/document-hub/go-api/internal/pipeline"
+	_ "github.com/kavishankarks/itp-rag-processor/go-api/docs"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/embedding_client"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/handlers"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/llm"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/pipeline"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/vector"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
 )
 
@@ -25,7 +25,7 @@ import (
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
-// @contact.url https://github.com/kavishankarks/document-hub
+// @contact.url https://github.com/kavishankarks/itp-rag-processor
 // @contact.email support@documenthub.io
 
 // @license.name MIT
@@ -39,12 +39,6 @@ func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
-	}
-
-	// Initialize database
-	db, err := database.Initialize()
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
 	}
 
 	// Create Fiber app
@@ -70,16 +64,33 @@ func main() {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "ok",
-			"service": "document-hub-api",
+			"service": "itp-rag-processor-api",
 		})
 	})
 
+	// Initialize Milvus client
+	milvusURL := os.Getenv("MILVUS_URL")
+	milvusToken := os.Getenv("MILVUS_TOKEN")
+	if milvusURL == "" || milvusToken == "" {
+		log.Fatal("MILVUS_URL and MILVUS_TOKEN environment variables are required")
+	}
+
+	milvusClient, err := vector.Initialize(milvusURL, milvusToken)
+	if err != nil {
+		log.Fatal("Failed to initialize Milvus client:", err)
+	}
+	defer milvusClient.Close()
+
+	if err := milvusClient.EnsureCollections(); err != nil {
+		log.Fatal("Failed to ensure Milvus collection:", err)
+	}
+
 	// Initialize handlers
-	h := handlers.NewHandler(db)
+	h := handlers.NewHandler(milvusClient)
 
 	// Initialize embedding client and pipeline orchestrator
 	embeddingClient := embedding_client.NewClient()
-	orchestrator := pipeline.NewOrchestrator(db, embeddingClient)
+	orchestrator := pipeline.NewOrchestrator(embeddingClient, milvusClient)
 	pipelineHandler := handlers.NewPipelineHandler(orchestrator)
 
 	// Initialize LLM provider
@@ -121,8 +132,8 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s", port)
-	log.Printf("swagger docs at http://localhost:%s/swagger/index.html", port)
-	log.Printf("swagger redoc at http://localhost:%s/swagger/redoc", port)
+	log.Printf("swagger docs at http://localhost:{port}/swagger/index.html")
+	log.Printf("swagger redoc at http://localhost:{port}/swagger/redoc")
 	if err := app.Listen(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}

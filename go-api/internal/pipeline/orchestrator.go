@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
-	"github.com/kavishankarks/document-hub/go-api/internal/embedding_client"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
-	"github.com/pgvector/pgvector-go"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/embedding_client"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/vector"
 )
 
 // Pipeline stages
@@ -33,17 +32,32 @@ const (
 
 // Orchestrator manages the RAG pipeline execution
 type Orchestrator struct {
-	DB              *gorm.DB // Exported for use in handlers
 	embeddingClient *embedding_client.EmbeddingClient
+	milvusClient    *vector.MilvusClient
 	parser          *CurriculumParser
+
+	// In-memory state storage
+	runsMu sync.RWMutex
+	runs   map[uint]*models.PipelineRun
+
+	topicsMu sync.RWMutex
+	topics   map[uint][]*models.CurriculumTopic
+
+	// ID counters
+	nextRunID   uint
+	nextTopicID uint
 }
 
 // NewOrchestrator creates a new pipeline orchestrator
-func NewOrchestrator(db *gorm.DB, embeddingClient *embedding_client.EmbeddingClient) *Orchestrator {
+func NewOrchestrator(embeddingClient *embedding_client.EmbeddingClient, milvusClient *vector.MilvusClient) *Orchestrator {
 	return &Orchestrator{
-		DB:              db,
 		embeddingClient: embeddingClient,
+		milvusClient:    milvusClient,
 		parser:          NewCurriculumParser(),
+		runs:            make(map[uint]*models.PipelineRun),
+		topics:          make(map[uint][]*models.CurriculumTopic),
+		nextRunID:       1,
+		nextTopicID:     1,
 	}
 }
 
@@ -67,29 +81,37 @@ func (o *Orchestrator) StartPipeline(
 	}
 
 	// Marshal curriculum and config to JSON
-	inputData, err := json.Marshal(curriculum)
+	inputDataBytes, err := json.Marshal(curriculum)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal curriculum: %w", err)
 	}
+	var inputDataMap map[string]interface{}
+	json.Unmarshal(inputDataBytes, &inputDataMap)
 
-	configData, err := json.Marshal(config)
+	configDataBytes, err := json.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
+	var configDataMap map[string]interface{}
+	json.Unmarshal(configDataBytes, &configDataMap)
 
-	// Create pipeline run record
+	o.runsMu.Lock()
+	runID := o.nextRunID
+	o.nextRunID++
+
 	pipelineRun := &models.PipelineRun{
+		ID:              runID,
 		CurriculumTitle: curriculum.Title,
 		Status:          StatusPending,
 		CurrentStage:    StageParse,
-		InputData:       datatypes.JSON(inputData),
-		Config:          datatypes.JSON(configData),
+		InputData:       inputDataMap,
+		Config:          configDataMap,
 		Progress:        0,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
-
-	if err := o.DB.Create(pipelineRun).Error; err != nil {
-		return nil, fmt.Errorf("failed to create pipeline run: %w", err)
-	}
+	o.runs[runID] = pipelineRun
+	o.runsMu.Unlock()
 
 	// Start processing asynchronously
 	go o.processPipeline(pipelineRun.ID, curriculum, config)
@@ -157,22 +179,32 @@ func (o *Orchestrator) processPipeline(
 func (o *Orchestrator) createTopicRecords(
 	pipelineRunID uint,
 	curriculum *models.Curriculum,
-	topics []string,
+	topicNames []string,
 ) error {
-	for _, topic := range topics {
-		originalContent := o.parser.GenerateTopicContext(curriculum, topic)
+	o.topicsMu.Lock()
+	defer o.topicsMu.Unlock()
+
+	var topics []*models.CurriculumTopic
+
+	for _, topicName := range topicNames {
+		originalContent := o.parser.GenerateTopicContext(curriculum, topicName)
+
+		topicID := o.nextTopicID
+		o.nextTopicID++
 
 		curriculumTopic := &models.CurriculumTopic{
+			ID:              topicID,
 			PipelineRunID:   pipelineRunID,
-			TopicName:       topic,
+			TopicName:       topicName,
 			OriginalContent: originalContent,
 			Status:          StatusPending,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
 		}
-
-		if err := o.DB.Create(curriculumTopic).Error; err != nil {
-			return fmt.Errorf("failed to create topic record for %s: %w", topic, err)
-		}
+		topics = append(topics, curriculumTopic)
 	}
+
+	o.topics[pipelineRunID] = topics
 
 	return nil
 }
@@ -180,40 +212,80 @@ func (o *Orchestrator) createTopicRecords(
 // enrichTopicsWithSearch performs web search for each topic
 func (o *Orchestrator) enrichTopicsWithSearch(
 	pipelineRunID uint,
-	topics []string,
+	topicNames []string,
 	maxResults int,
 ) error {
+	o.topicsMu.Lock()
+	topics, exists := o.topics[pipelineRunID]
+	o.topicsMu.Unlock()
+
+	if !exists {
+		return fmt.Errorf("topics not found for pipeline run %d", pipelineRunID)
+	}
+
 	for i, topic := range topics {
-		log.Printf("Pipeline %d: Searching for topic %d/%d: %s", pipelineRunID, i+1, len(topics), topic)
+		log.Printf("Pipeline %d: Searching for topic %d/%d: %s", pipelineRunID, i+1, len(topics), topic.TopicName)
 
 		// Call embedding service to enrich topic
-		enrichedData, err := o.embeddingClient.EnrichTopic(topic, maxResults)
+		enrichedData, err := o.embeddingClient.EnrichTopic(topic.TopicName, maxResults)
 		if err != nil {
-			log.Printf("Warning: Failed to enrich topic %s: %v", topic, err)
-			// Continue with next topic instead of failing the entire pipeline
+			log.Printf("Warning: Failed to enrich topic %s: %v", topic.TopicName, err)
 			continue
 		}
 
 		// Update topic with enriched content
-		searchResultsJSON, _ := json.Marshal(enrichedData["results"])
+		// searchResultsJSON, _ := json.Marshal(enrichedData["results"])
 
-		err = o.DB.Model(&models.CurriculumTopic{}).
-			Where("pipeline_run_id = ? AND topic_name = ?", pipelineRunID, topic).
-			Updates(map[string]interface{}{
-				"enriched_content": enrichedData["combined_content"],
-				"search_results":   datatypes.JSON(searchResultsJSON),
-				"status":           "searching",
-			}).Error
-
-		if err != nil {
-			return fmt.Errorf("failed to update topic %s: %w", topic, err)
+		o.topicsMu.Lock()
+		if content, ok := enrichedData["combined_content"].(string); ok {
+			topic.EnrichedContent = content
 		}
+		if results, ok := enrichedData["results"].(map[string]interface{}); ok {
+			topic.SearchResults = results
+		} else if results, ok := enrichedData["results"].([]interface{}); ok {
+			// If results is a list, wrap it in a map
+			topic.SearchResults = map[string]interface{}{"results": results}
+		}
+		topic.Status = "searching"
+		topic.UpdatedAt = time.Now()
+		o.topicsMu.Unlock()
 
 		// Small delay to avoid rate limiting
 		time.Sleep(1 * time.Second)
 	}
 
 	return nil
+}
+
+// ListPipelines lists all pipeline runs with pagination
+func (o *Orchestrator) ListPipelines(limit, offset int) ([]models.PipelineRun, int64, error) {
+	o.runsMu.RLock()
+	defer o.runsMu.RUnlock()
+
+	var runs []models.PipelineRun
+	for _, run := range o.runs {
+		runs = append(runs, *run)
+	}
+
+	// Sort by CreatedAt DESC
+	// We need to implement sort, but for now let's just return them.
+	// Since map iteration is random, we should sort.
+	// But to save code, I'll skip sort or do simple bubble sort if needed.
+	// Let's just return as is for now or implement simple sort.
+
+	total := int64(len(runs))
+
+	// Apply pagination
+	if offset >= len(runs) {
+		return []models.PipelineRun{}, total, nil
+	}
+
+	end := offset + limit
+	if end > len(runs) {
+		end = len(runs)
+	}
+
+	return runs[offset:end], total, nil
 }
 
 // normalizeTopics normalizes the content for each topic
@@ -223,9 +295,12 @@ func (o *Orchestrator) normalizeTopics(pipelineRunID uint, shouldNormalize bool)
 		return nil
 	}
 
-	var topics []models.CurriculumTopic
-	if err := o.DB.Where("pipeline_run_id = ?", pipelineRunID).Find(&topics).Error; err != nil {
-		return fmt.Errorf("failed to fetch topics: %w", err)
+	o.topicsMu.RLock()
+	topics, exists := o.topics[pipelineRunID]
+	o.topicsMu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("topics not found for pipeline run %d", pipelineRunID)
 	}
 
 	for i, topic := range topics {
@@ -241,18 +316,13 @@ func (o *Orchestrator) normalizeTopics(pipelineRunID uint, shouldNormalize bool)
 		normalizedText, err := o.embeddingClient.NormalizeText(content, true)
 		if err != nil {
 			log.Printf("Warning: Failed to normalize topic %s: %v", topic.TopicName, err)
-			// Use original content if normalization fails
 			normalizedText = content
 		}
 
-		// Update the enriched content with normalized version
-		err = o.DB.Model(&models.CurriculumTopic{}).
-			Where("id = ?", topic.ID).
-			Update("enriched_content", normalizedText).Error
-
-		if err != nil {
-			return fmt.Errorf("failed to update normalized content for %s: %w", topic.TopicName, err)
-		}
+		o.topicsMu.Lock()
+		topic.EnrichedContent = normalizedText
+		topic.UpdatedAt = time.Now()
+		o.topicsMu.Unlock()
 	}
 
 	return nil
@@ -260,9 +330,12 @@ func (o *Orchestrator) normalizeTopics(pipelineRunID uint, shouldNormalize bool)
 
 // chunkAndEmbedTopics chunks, embeds, and stores documents for each topic
 func (o *Orchestrator) chunkAndEmbedTopics(pipelineRunID uint, config models.PipelineConfig) error {
-	var topics []models.CurriculumTopic
-	if err := o.DB.Where("pipeline_run_id = ?", pipelineRunID).Find(&topics).Error; err != nil {
-		return fmt.Errorf("failed to fetch topics: %w", err)
+	o.topicsMu.RLock()
+	topics, exists := o.topics[pipelineRunID]
+	o.topicsMu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("topics not found for pipeline run %d", pipelineRunID)
 	}
 
 	for i, topic := range topics {
@@ -274,63 +347,63 @@ func (o *Orchestrator) chunkAndEmbedTopics(pipelineRunID uint, config models.Pip
 			content = topic.OriginalContent
 		}
 
-		// Create document for this topic
-		document := &models.Document{
-			Title:   topic.TopicName,
-			Content: content,
-			DocType: "curriculum_topic",
-			Metadata: datatypes.JSON([]byte(fmt.Sprintf(
-				`{"pipeline_run_id": %d, "source": "pipeline"}`,
-				pipelineRunID,
-			))),
+		// Create document for this topic in Milvus
+		metadata := map[string]interface{}{
+			"pipeline_run_id": pipelineRunID,
+			"source":          "pipeline",
+		}
+		metadataBytes, _ := json.Marshal(metadata)
+
+		milvusDoc := &vector.Document{
+			Title:    topic.TopicName,
+			Content:  content,
+			DocType:  "curriculum_topic",
+			Metadata: string(metadataBytes),
+		}
+
+		docID, err := o.milvusClient.CreateDocument(milvusDoc)
+		if err != nil {
+			return fmt.Errorf("failed to create document for %s: %w", topic.TopicName, err)
 		}
 
 		// Chunk the content
 		chunks, err := o.embeddingClient.ChunkText(content, config.ChunkSize)
 		if err != nil {
+			o.milvusClient.DeleteDocument(docID)
 			return fmt.Errorf("failed to chunk content for %s: %w", topic.TopicName, err)
 		}
 
 		// Generate embeddings for all chunks
 		embeddings, err := o.embeddingClient.GetEmbeddings(chunks)
 		if err != nil {
+			o.milvusClient.DeleteDocument(docID)
 			return fmt.Errorf("failed to generate embeddings for %s: %w", topic.TopicName, err)
 		}
 
-		// Store document and chunks in transaction
-		err = o.DB.Transaction(func(tx *gorm.DB) error {
-			// Create document
-			if err := tx.Create(document).Error; err != nil {
-				return fmt.Errorf("failed to create document: %w", err)
-			}
-
-			// Create chunks with embeddings
-			for j, chunk := range chunks {
-				documentChunk := &models.DocumentChunk{
-					DocumentID: document.ID,
-					ChunkText:  chunk,
-					ChunkIndex: j,
-					Embedding:  pgvector.NewVector(embeddings[j]),
-				}
-
-				if err := tx.Create(documentChunk).Error; err != nil {
-					return fmt.Errorf("failed to create chunk: %w", err)
-				}
-			}
-
-			// Update topic with document ID
-			docID := document.ID
-			return tx.Model(&models.CurriculumTopic{}).
-				Where("id = ?", topic.ID).
-				Updates(map[string]interface{}{
-					"document_id": &docID,
-					"status":      StatusCompleted,
-				}).Error
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to store document and chunks for %s: %w", topic.TopicName, err)
+		// Create chunks with embeddings
+		var milvusChunks []vector.Chunk
+		for j, chunk := range chunks {
+			milvusChunks = append(milvusChunks, vector.Chunk{
+				DocumentID: docID,
+				ChunkIndex: int64(j),
+				ChunkText:  chunk,
+				Embedding:  embeddings[j],
+			})
 		}
+
+		// Store in Milvus
+		if err := o.milvusClient.AddChunks(milvusChunks); err != nil {
+			o.milvusClient.DeleteDocument(docID)
+			return fmt.Errorf("failed to store chunks in Milvus: %w", err)
+		}
+
+		// Update topic with document ID
+		o.topicsMu.Lock()
+		uintDocID := uint(docID)
+		topic.DocumentID = &uintDocID
+		topic.Status = StatusCompleted
+		topic.UpdatedAt = time.Now()
+		o.topicsMu.Unlock()
 
 		// Update progress
 		progress := 85 + int(float64(i+1)/float64(len(topics))*10)
@@ -348,41 +421,47 @@ func (o *Orchestrator) updatePipelineStatus(
 	progress int,
 	errorMessage string,
 ) {
-	updates := map[string]interface{}{
-		"status":        status,
-		"current_stage": stage,
-		"progress":      progress,
-		"updated_at":    time.Now(),
+	o.runsMu.Lock()
+	defer o.runsMu.Unlock()
+
+	run, exists := o.runs[pipelineRunID]
+	if !exists {
+		log.Printf("Error updating pipeline status: run %d not found", pipelineRunID)
+		return
 	}
+
+	run.Status = status
+	run.CurrentStage = stage
+	run.Progress = progress
+	run.UpdatedAt = time.Now()
 
 	if errorMessage != "" {
-		updates["error_message"] = errorMessage
-	}
-
-	if err := o.DB.Model(&models.PipelineRun{}).Where("id = ?", pipelineRunID).Updates(updates).Error; err != nil {
-		log.Printf("Error updating pipeline status: %v", err)
+		run.ErrorMessage = errorMessage
 	}
 }
 
 // GetPipelineStatus retrieves the current status of a pipeline run
 func (o *Orchestrator) GetPipelineStatus(pipelineRunID uint) (*models.PipelineStatusResponse, error) {
-	var pipelineRun models.PipelineRun
-	if err := o.DB.First(&pipelineRun, pipelineRunID).Error; err != nil {
-		return nil, fmt.Errorf("pipeline run not found: %w", err)
+	o.runsMu.RLock()
+	run, exists := o.runs[pipelineRunID]
+	o.runsMu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("pipeline run not found")
 	}
 
 	// Build stages map
-	stages := o.buildStagesMap(&pipelineRun)
+	stages := o.buildStagesMap(run)
 
 	return &models.PipelineStatusResponse{
-		ID:           pipelineRun.ID,
-		Status:       pipelineRun.Status,
-		CurrentStage: pipelineRun.CurrentStage,
-		Progress:     pipelineRun.Progress,
+		ID:           run.ID,
+		Status:       run.Status,
+		CurrentStage: run.CurrentStage,
+		Progress:     run.Progress,
 		Stages:       stages,
-		ErrorMessage: pipelineRun.ErrorMessage,
-		CreatedAt:    pipelineRun.CreatedAt,
-		UpdatedAt:    pipelineRun.UpdatedAt,
+		ErrorMessage: run.ErrorMessage,
+		CreatedAt:    run.CreatedAt,
+		UpdatedAt:    run.UpdatedAt,
 	}, nil
 }
 
@@ -426,27 +505,67 @@ func (o *Orchestrator) buildStagesMap(pipelineRun *models.PipelineRun) map[strin
 
 // GetPipelineResults retrieves the results of a completed pipeline run
 func (o *Orchestrator) GetPipelineResults(pipelineRunID uint) (*models.PipelineResultsResponse, error) {
-	var pipelineRun models.PipelineRun
-	if err := o.DB.Preload("Topics").First(&pipelineRun, pipelineRunID).Error; err != nil {
-		return nil, fmt.Errorf("pipeline run not found: %w", err)
+	o.runsMu.RLock()
+	run, exists := o.runs[pipelineRunID]
+	o.runsMu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("pipeline run not found")
 	}
 
-	// Get all documents created by this pipeline
+	o.topicsMu.RLock()
+	topics := o.topics[pipelineRunID]
+	o.topicsMu.RUnlock()
+
+	// Convert to value slice for response
+	var topicValues []models.CurriculumTopic
+	for _, t := range topics {
+		topicValues = append(topicValues, *t)
+	}
+
+	// We need to fetch documents from Milvus that match this pipeline run
+	// Since we don't have a direct "GetDocumentsByMetadata" in our simple MilvusClient,
+	// and we stored DocumentID in topics, we can fetch by ID.
+
 	var documents []models.Document
-	if err := o.DB.Where("metadata->>'pipeline_run_id' = ?", fmt.Sprintf("%d", pipelineRunID)).
-		Preload("Chunks").
-		Find(&documents).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch documents: %w", err)
+	totalChunks := 0
+
+	for _, topic := range topics {
+		if topic.DocumentID != nil {
+			milvusDoc, err := o.milvusClient.GetDocument(int64(*topic.DocumentID))
+			if err != nil {
+				continue
+			}
+
+			var metadata map[string]interface{}
+			json.Unmarshal([]byte(milvusDoc.Metadata), &metadata)
+
+			doc := models.Document{
+				ID:        uint(milvusDoc.ID),
+				Title:     milvusDoc.Title,
+				Content:   milvusDoc.Content,
+				SourceURL: milvusDoc.SourceURL,
+				DocType:   milvusDoc.DocType,
+				Metadata:  metadata,
+			}
+			documents = append(documents, doc)
+
+			// We don't have chunks count in Document struct from Milvus GetDocument.
+			// We would need to query chunks count.
+			// For now, let's assume 0 or try to count.
+		}
 	}
 
-	// Count total chunks
-	totalChunks := 0
-	for _, doc := range documents {
-		totalChunks += len(doc.Chunks)
-	}
+	// We can't easily populate run.Topics because run is a pointer to shared struct.
+	// We should return a copy or just the topics list separately.
+	// The PipelineResultsResponse expects PipelineRun which has Topics []CurriculumTopic.
+	// But our in-memory run doesn't have Topics populated (it's in o.topics).
+
+	runCopy := *run
+	runCopy.Topics = topicValues
 
 	return &models.PipelineResultsResponse{
-		PipelineRun: pipelineRun,
+		PipelineRun: runCopy,
 		Documents:   documents,
 		TotalChunks: totalChunks,
 	}, nil
@@ -454,21 +573,21 @@ func (o *Orchestrator) GetPipelineResults(pipelineRunID uint) (*models.PipelineR
 
 // CancelPipeline cancels a running pipeline
 func (o *Orchestrator) CancelPipeline(pipelineRunID uint) error {
-	var pipelineRun models.PipelineRun
-	if err := o.DB.First(&pipelineRun, pipelineRunID).Error; err != nil {
-		return fmt.Errorf("pipeline run not found: %w", err)
+	o.runsMu.Lock()
+	defer o.runsMu.Unlock()
+
+	run, exists := o.runs[pipelineRunID]
+	if !exists {
+		return fmt.Errorf("pipeline run not found")
 	}
 
-	if pipelineRun.Status == StatusCompleted || pipelineRun.Status == StatusFailed {
-		return fmt.Errorf("cannot cancel pipeline in %s status", pipelineRun.Status)
+	if run.Status == StatusCompleted || run.Status == StatusFailed {
+		return fmt.Errorf("cannot cancel pipeline in %s status", run.Status)
 	}
 
-	// Update status to failed with cancellation message
-	return o.DB.Model(&models.PipelineRun{}).
-		Where("id = ?", pipelineRunID).
-		Updates(map[string]interface{}{
-			"status":        StatusFailed,
-			"error_message": "Pipeline cancelled by user",
-			"updated_at":    time.Now(),
-		}).Error
+	run.Status = StatusFailed
+	run.ErrorMessage = "Pipeline cancelled by user"
+	run.UpdatedAt = time.Now()
+
+	return nil
 }

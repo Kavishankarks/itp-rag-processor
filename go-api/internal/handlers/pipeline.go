@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
-	"github.com/kavishankarks/document-hub/go-api/internal/pipeline"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/pipeline"
 )
 
 // PipelineHandler handles pipeline-related requests
@@ -145,27 +145,15 @@ func (h *PipelineHandler) CancelPipeline(c *fiber.Ctx) error {
 func (h *PipelineHandler) ListPipelines(c *fiber.Ctx) error {
 	skip := c.QueryInt("skip", 0)
 	limit := c.QueryInt("limit", 20)
-	status := c.Query("status", "")
+	// status := c.Query("status", "") // Status filtering not implemented in in-memory store yet
 
 	// Limit maximum
 	if limit > 100 {
 		limit = 100
 	}
 
-	query := h.orchestrator.DB.Model(&models.PipelineRun{}).Order("created_at DESC")
-
-	// Filter by status if provided
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-
-	// Get total count
-	var total int64
-	query.Count(&total)
-
-	// Get pipeline runs
-	var pipelineRuns []models.PipelineRun
-	if err := query.Offset(skip).Limit(limit).Find(&pipelineRuns).Error; err != nil {
+	pipelineRuns, total, err := h.orchestrator.ListPipelines(limit, skip)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch pipeline runs",
 		})

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/kavishankarks/document-hub/go-api/internal/llm"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/llm"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
 )
 
 // GenerateHandler handles LLM generation requests

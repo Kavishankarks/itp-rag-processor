@@ -39,7 +39,7 @@ class EmbeddingService:
         return embeddings.tolist()
 
     def chunk_text(
-        self, text: str, chunk_size: int = 500, chunk_overlap: int = 50
+        self, text: str, chunk_size: int = os.getenv("CHUNK_SIZE", 500), chunk_overlap: int = os.getenv("CHUNK_OVERLAP", 50)
     ) -> List[str]:
         """
         Split text into overlapping chunks.

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
 )
 
 var DB *gorm.DB
@@ -34,9 +34,6 @@ func Initialize() (*gorm.DB, error) {
 	}
 
 	// Enable extensions
-	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS vector").Error; err != nil {
-		return nil, fmt.Errorf("failed to create vector extension: %w", err)
-	}
 
 	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_trgm").Error; err != nil {
 		return nil, fmt.Errorf("failed to create pg_trgm extension: %w", err)
@@ -68,12 +65,6 @@ func Initialize() (*gorm.DB, error) {
 	db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_chunks_text_gin
 		ON document_chunks USING gin(to_tsvector('english', chunk_text))
-	`)
-
-	// Create HNSW index for vector similarity search
-	db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_chunks_embedding_hnsw
-		ON document_chunks USING hnsw(embedding vector_cosine_ops)
 	`)
 
 	// Create index on pipeline runs for efficient status queries

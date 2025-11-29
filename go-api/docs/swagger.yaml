@@ -1,6 +1,6 @@
 basePath: /api/v1
 definitions:
-  github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CreateDocumentRequest:
     properties:
       content:
         example: PostgreSQL is a powerful database...
@@ -20,11 +20,11 @@ definitions:
     - content
     - title
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Curriculum:
     properties:
       modules:
         items:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CurriculumModule'
         type: array
       title:
         type: string
@@ -32,7 +32,7 @@ definitions:
     - modules
     - title
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CurriculumModule:
     properties:
       description:
         type: string
@@ -46,7 +46,7 @@ definitions:
     - name
     - topics
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.Document:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document:
     properties:
       content:
         type: string
@@ -65,7 +65,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineConfig:
     properties:
       chunk_overlap:
         type: integer
@@ -81,18 +81,18 @@ definitions:
       web_search_enabled:
         type: boolean
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineResultsResponse:
     properties:
       documents:
         items:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
         type: array
       pipeline_run:
-        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun'
+        $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun'
       total_chunks:
         type: integer
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun:
     properties:
       config:
         type: object
@@ -118,7 +118,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineStatusResponse:
     properties:
       created_at:
         type: string
@@ -139,25 +139,25 @@ definitions:
       updated_at:
         type: string
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.SearchResult:
     properties:
       document:
-        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+        $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
       score:
         type: number
       snippet:
         type: string
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.StartPipelineRequest:
     properties:
       config:
-        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig'
+        $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineConfig'
       curriculum:
-        $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum'
+        $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Curriculum'
     required:
     - curriculum
     type: object
-  github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest:
+  github_com_kavishankarks_itp-rag-processor_go-api_internal_models.UpdateDocumentRequest:
     properties:
       content:
         type: string
@@ -187,15 +187,15 @@ definitions:
         type: string
       sources:
         items:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.SearchResult'
         type: array
     type: object
-host: localhost:8000
+host: localhost:8001
 info:
   contact:
     email: support@documenthub.io
     name: API Support
-    url: https://github.com/kavishankarks/document-hub
+    url: https://github.com/kavishankarks/itp-rag-processor
   description: A high-performance documentation platform with intelligent search using
     full-text and semantic vector search.
   license:
@@ -253,7 +253,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineResultsResponse'
         "404":
           description: Not Found
           schema:
@@ -278,7 +278,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineStatusResponse'
         "404":
           description: Not Found
           schema:
@@ -300,14 +300,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.StartPipelineRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun'
         "400":
           description: Bad Request
           schema:
@@ -381,14 +381,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CreateDocumentRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
         "400":
           description: Bad Request
           schema:
@@ -450,7 +450,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
         "400":
           description: Bad Request
           schema:
@@ -484,12 +484,12 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest'
+          $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.UpdateDocumentRequest'
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
         "400":
           description: Bad Request
           schema:
@@ -529,7 +529,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document'
+            $ref: '#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document'
         "400":
           description: Bad Request
           schema:

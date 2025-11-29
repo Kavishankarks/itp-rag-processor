@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

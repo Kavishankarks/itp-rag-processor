@@ -52,9 +52,19 @@ def generate_answer(prompt, limit, min_score, include_citations):
             st.error(f"Error connecting to API: {e}")
         return None
 
+def upload_document(file):
+    try:
+        files = {"file": (file.name, file, file.type)}
+        response = requests.post(f"{API_URL}/documents/upload", files=files)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error uploading document: {e}")
+        return None
+
 def main():
     st.title("🔍 Document Hub")
-    st.markdown("Search documents or ask questions using AI.")
+    st.markdown("Search documents, ask questions, or upload new content.")
 
     # Sidebar configuration
     with st.sidebar:
@@ -68,7 +78,7 @@ def main():
         st.markdown(f"**API URL:** `{API_URL}`")
 
     # Tabs for different modes
-    tab1, tab2 = st.tabs(["🔎 Search", "✨ Ask AI"])
+    tab1, tab2, tab3 = st.tabs(["🔎 Search", "✨ Ask AI", "📤 Upload"])
 
     with tab1:
         st.header("Search Documents")
@@ -134,6 +144,23 @@ def main():
                             for i, source in enumerate(response["sources"]):
                                 doc = source.get('document', source)
                                 st.markdown(f"**{i+1}. {doc.get('title', 'Untitled')}** (Score: {source.get('score', 0):.2f})")
+
+    with tab3:
+        st.header("Upload Document")
+        st.markdown("Upload PDF, Text, or HTML files to the knowledge base.")
+        
+        uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'txt', 'html'])
+        
+        if uploaded_file is not None:
+            st.info(f"File selected: {uploaded_file.name} ({uploaded_file.type})")
+            
+            if st.button("Upload File", type="primary", key="upload_btn"):
+                with st.spinner("Uploading and processing..."):
+                    result = upload_document(uploaded_file)
+                
+                if result:
+                    st.success(f"File '{uploaded_file.name}' uploaded successfully!")
+                    st.json(result)
 
 if __name__ == "__main__":
     main()
