@@ -46,7 +46,7 @@ vendor/
 *~
 
 # Models and data
-models/
+/models/
 *.bin
 *.pt
 *.pth
