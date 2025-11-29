@@ -122,8 +122,8 @@ curl -X POST http://localhost:8000/api/v1/pipeline/start \
 
 ```bash
 # Clone the repository
-git clone https://github.com/kavishankarks/document-hub.git
-cd document-hub
+git clone https://github.com/kavishankarks/itp-rag-processor.git
+cd itp-rag-processor
 
 # Start all services
 docker-compose up -d
@@ -290,7 +290,7 @@ Response:
 ## Project Structure
 
 ```
-document-hub/
+itp-rag-processor/
 ├── go-api/                      # Go API Service
 │   ├── cmd/api/
 │   │   └── main.go              # Entry point

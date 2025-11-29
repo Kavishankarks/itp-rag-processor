@@ -10,7 +10,7 @@
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
             "name": "API Support",
-            "url": "https://github.com/kavishankarks/document-hub",
+            "url": "https://github.com/kavishankarks/itp-rag-processor",
             "email": "support@documenthub.io"
         },
         "license": {
@@ -42,7 +42,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.StartPipelineRequest"
                         }
                     }
                 ],
@@ -50,7 +50,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun"
                         }
                     },
                     "400": {
@@ -147,7 +147,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineResultsResponse"
                         }
                     },
                     "404": {
@@ -185,7 +185,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineStatusResponse"
                         }
                     },
                     "404": {
@@ -291,7 +291,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CreateDocumentRequest"
                         }
                     }
                 ],
@@ -299,7 +299,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                         }
                     },
                     "400": {
@@ -352,7 +352,7 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                         }
                     },
                     "400": {
@@ -395,7 +395,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                         }
                     },
                     "400": {
@@ -446,7 +446,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.UpdateDocumentRequest"
                         }
                     }
                 ],
@@ -454,7 +454,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                            "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                         }
                     },
                     "400": {
@@ -636,7 +636,7 @@
         }
     },
     "definitions": {
-        "github_com_kavishankarks_document-hub_go-api_internal_models.CreateDocumentRequest": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CreateDocumentRequest": {
             "type": "object",
             "required": [
                 "content",
@@ -664,7 +664,7 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Curriculum": {
             "type": "object",
             "required": [
                 "modules",
@@ -674,7 +674,7 @@
                 "modules": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule"
+                        "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CurriculumModule"
                     }
                 },
                 "title": {
@@ -682,7 +682,7 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.CurriculumModule": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.CurriculumModule": {
             "type": "object",
             "required": [
                 "name",
@@ -703,7 +703,7 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.Document": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document": {
             "type": "object",
             "properties": {
                 "content": {
@@ -732,7 +732,7 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineConfig": {
             "type": "object",
             "properties": {
                 "chunk_overlap": {
@@ -756,24 +756,24 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.PipelineResultsResponse": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineResultsResponse": {
             "type": "object",
             "properties": {
                 "documents": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                        "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                     }
                 },
                 "pipeline_run": {
-                    "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun"
+                    "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun"
                 },
                 "total_chunks": {
                     "type": "integer"
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.PipelineRun": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineRun": {
             "type": "object",
             "properties": {
                 "config": {
@@ -811,7 +811,7 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.PipelineStatusResponse": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineStatusResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -843,11 +843,11 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.SearchResult": {
             "type": "object",
             "properties": {
                 "document": {
-                    "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Document"
+                    "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Document"
                 },
                 "score": {
                     "type": "number"
@@ -857,21 +857,21 @@
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.StartPipelineRequest": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.StartPipelineRequest": {
             "type": "object",
             "required": [
                 "curriculum"
             ],
             "properties": {
                 "config": {
-                    "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.PipelineConfig"
+                    "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.PipelineConfig"
                 },
                 "curriculum": {
-                    "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.Curriculum"
+                    "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.Curriculum"
                 }
             }
         },
-        "github_com_kavishankarks_document-hub_go-api_internal_models.UpdateDocumentRequest": {
+        "github_com_kavishankarks_itp-rag-processor_go-api_internal_models.UpdateDocumentRequest": {
             "type": "object",
             "properties": {
                 "content": {
@@ -917,7 +917,7 @@
                 "sources": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_kavishankarks_document-hub_go-api_internal_models.SearchResult"
+                        "$ref": "#/definitions/github_com_kavishankarks_itp-rag-processor_go-api_internal_models.SearchResult"
                     }
                 }
             }

@@ -24,7 +24,7 @@ Documentation Hub v1 - Plan
      - psycopg2 (PostgreSQL driver)                                                                                                 
                                                                                                                                     
      Project Structure:                                                                                                             
-     document-hub/                                                                                                                  
+     itp-rag-processor/                                                                                                                  
      ├── app/                                                                                                                       
        ├── main.py          # FastAPI app & routes                                                                                
        ├── models.py        # SQLAlchemy models                                                                                   

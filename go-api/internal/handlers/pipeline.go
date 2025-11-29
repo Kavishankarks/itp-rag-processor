@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
-	"github.com/kavishankarks/document-hub/go-api/internal/pipeline"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/pipeline"
 )
 
 // PipelineHandler handles pipeline-related requests

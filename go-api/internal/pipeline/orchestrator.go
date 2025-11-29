@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kavishankarks/document-hub/go-api/internal/embedding_client"
-	"github.com/kavishankarks/document-hub/go-api/internal/models"
-	"github.com/kavishankarks/document-hub/go-api/internal/vector"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/embedding_client"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
+	"github.com/kavishankarks/itp-rag-processor/go-api/internal/vector"
 )
 
 // Pipeline stages
