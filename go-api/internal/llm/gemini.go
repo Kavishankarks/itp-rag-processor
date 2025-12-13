@@ -9,12 +9,6 @@ import (
 	"google.golang.org/api/option"
 )
 
-// LLMProvider defines the interface for LLM interactions
-type LLMProvider interface {
-	GenerateContent(ctx context.Context, prompt string) (string, error)
-	Close() error
-}
-
 // GeminiProvider implements LLMProvider for Google Gemini
 type GeminiProvider struct {
 	client *genai.Client
@@ -33,7 +27,7 @@ func NewGeminiProvider(ctx context.Context) (*GeminiProvider, error) {
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
-	model := client.GenerativeModel("gemini-2.0-flash")
+	model := client.GenerativeModel("gemini-3-pro-preview")
 
 	// Set default safety settings to be less restrictive for educational content
 	model.SafetySettings = []*genai.SafetySetting{

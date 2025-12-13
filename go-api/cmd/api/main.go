@@ -94,11 +94,22 @@ func main() {
 	pipelineHandler := handlers.NewPipelineHandler(orchestrator)
 
 	// Initialize LLM provider
-	// We use a background context here, but in production you might want to manage this better
-	llmProvider, err := llm.NewGeminiProvider(context.Background())
-	if err != nil {
-		log.Printf("Warning: Failed to initialize Gemini provider: %v", err)
+	var llmProvider llm.LLMProvider
+	llmProviderType := os.Getenv("LLM_PROVIDER")
+
+	if llmProviderType == "groq" {
+		llmProvider, err = llm.NewGroqProvider()
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Groq provider: %v", err)
+		}
+	} else {
+		// Default to Gemini
+		llmProvider, err = llm.NewGeminiProvider(context.Background())
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Gemini provider: %v", err)
+		}
 	}
+
 	generateHandler := handlers.NewGenerateHandler(llmProvider, h)
 
 	// API routes

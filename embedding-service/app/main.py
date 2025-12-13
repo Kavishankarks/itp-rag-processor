@@ -299,8 +299,8 @@ if __name__ == "__main__":
 
     port = int(os.getenv("APP_PORT", "8002"))
     print(f"Starting server on port {port}")
-    print("swagger docs at http://localhost:{port}/docs")
-    print("swagger redoc at http://localhost:{port}/redoc")
+    print(f"swagger docs at http://localhost:{port}/docs")
+    print(f"swagger redoc at http://localhost:{port}/redoc")
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
