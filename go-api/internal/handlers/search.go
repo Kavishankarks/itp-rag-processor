@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/kavishankarks/itp-rag-processor/go-api/internal/models"
@@ -70,6 +70,7 @@ func (h *Handler) semanticSearch(query string, limit int, minScore float64) []mo
 	// Get embedding for the query
 	embeddings, err := h.embeddingClient.GetEmbeddings([]string{query})
 	if err != nil {
+		log.Printf("Embedding error: %v\n", err)
 		return []models.SearchResult{}
 	}
 
@@ -80,7 +81,7 @@ func (h *Handler) semanticSearch(query string, limit int, minScore float64) []mo
 	// Search in Milvus
 	milvusResults, err := h.milvusClient.Search(embeddings[0], limit, minScore)
 	if err != nil {
-		fmt.Printf("Milvus search error: %v\n", err)
+		log.Printf("Milvus search error: %v\n", err)
 		return []models.SearchResult{}
 	}
 
@@ -95,7 +96,7 @@ func (h *Handler) semanticSearch(query string, limit int, minScore float64) []mo
 	for _, res := range milvusResults {
 		milvusDoc, err := h.milvusClient.GetDocument(res.DocumentID)
 		if err != nil {
-			fmt.Printf("Warning: Failed to get document %d: %v\n", res.DocumentID, err)
+			log.Printf("Warning: Failed to get document %d: %v\n", res.DocumentID, err)
 			continue
 		}
 

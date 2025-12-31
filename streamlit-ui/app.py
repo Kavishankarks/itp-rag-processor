@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-API_URL = os.getenv("API_URL", "http://localhost:8000/api/v1")
+API_URL = os.getenv("API_URL", "http://localhost:8002/api/v1")
 
 st.set_page_config(
     page_title="Document Hub Search",
@@ -62,6 +62,30 @@ def upload_document(file):
         st.error(f"Error uploading document: {e}")
         return None
 
+def convert_temp_document(file):
+    try:
+        files = {"file": (file.name, file, file.type)}
+        response = requests.post(f"{API_URL}/convert", files=files)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error converting document: {e}")
+        return None
+
+def chunk_text(text, chunk_size, chunk_overlap):
+    try:
+        payload = {
+            "text": text,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap
+        }
+        response = requests.post(f"{API_URL}/chunk", json=payload)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error chunking text: {e}")
+        return None
+
 def main():
     st.title("🔍 Document Hub")
     st.markdown("Search documents, ask questions, or upload new content.")
@@ -78,7 +102,7 @@ def main():
         st.markdown(f"**API URL:** `{API_URL}`")
 
     # Tabs for different modes
-    tab1, tab2, tab3 = st.tabs(["🔎 Search", "✨ Ask AI", "📤 Upload"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔎 Search", "✨ Ask AI", "📤 Upload", "🔄 Test Convert", "✂️ Test Chunking"])
 
     with tab1:
         st.header("Search Documents")
@@ -161,6 +185,56 @@ def main():
                 if result:
                     st.success(f"File '{uploaded_file.name}' uploaded successfully!")
                     st.json(result)
+
+    with tab4:
+        st.header("Test Conversion")
+        st.markdown("Upload a file to see how it's converted to Markdown.")
+        
+        convert_file = st.file_uploader("Choose a file to convert", type=['pdf', 'txt', 'html'], key="convert_uploader")
+        
+        if convert_file is not None:
+            if st.button("Convert", type="primary", key="convert_btn"):
+                with st.spinner("Converting..."):
+                    result = convert_temp_document(convert_file)
+                
+                if result:
+                    st.success("Conversion successful!")
+                    st.markdown("### Markdown Output")
+                    st.code(result.get("markdown", ""), language="markdown")
+                    
+                    # Store in session state for chunking tab
+                    st.session_state['last_converted_text'] = result.get("markdown", "")
+                    st.info("Text preserved for the 'Test Chunking' tab.")
+
+    with tab5:
+        st.header("Test Chunking")
+        st.markdown("Test the chunking logic on valid text.")
+        
+        # Default text from previous conversion if available
+        default_text = st.session_state.get('last_converted_text', "Enter or paste text here to test chunking...")
+        
+        chunk_text_input = st.text_area("Text to Chunk", value=default_text, height=300, key="chunk_text_area")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            test_chunk_size = st.number_input("Chunk Size", min_value=10, value=500, step=10)
+        with col2:
+            test_chunk_overlap = st.number_input("Chunk Overlap", min_value=0, value=50, step=10)
+            
+        if st.button("Generate Chunks", type="primary", key="chunk_btn"):
+            if not chunk_text_input:
+                st.warning("Please enter some text to chunk.")
+            else:
+                with st.spinner("Chunking..."):
+                    result = chunk_text(chunk_text_input, test_chunk_size, test_chunk_overlap)
+                
+                if result and "chunks" in result:
+                    chunks = result["chunks"]
+                    st.success(f"Generated {len(chunks)} chunks")
+                    
+                    for i, chunk in enumerate(chunks):
+                        with st.expander(f"Chunk {i+1} ({len(chunk)} chars)"):
+                            st.text(chunk)
 
 if __name__ == "__main__":
     main()

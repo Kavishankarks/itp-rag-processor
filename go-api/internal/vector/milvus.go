@@ -11,12 +11,14 @@ import (
 )
 
 const (
-	CollectionName = "document_chunks"
-	Dim            = 384 // Embedding dimension
+	// CollectionName base name - actual name will be suffixed with dimension
+	BaseCollectionName = "document_chunks"
 )
 
 type MilvusClient struct {
-	client client.Client
+	client    client.Client
+	dimension int
+	collName  string
 }
 
 type Chunk struct {
@@ -27,7 +29,7 @@ type Chunk struct {
 	Embedding  []float32
 }
 
-func Initialize(url, token string) (*MilvusClient, error) {
+func Initialize(url, token string, dimension int) (*MilvusClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -39,7 +41,14 @@ func Initialize(url, token string) (*MilvusClient, error) {
 		return nil, fmt.Errorf("failed to connect to Milvus: %w", err)
 	}
 
-	return &MilvusClient{client: c}, nil
+	// Use dimension-specific collection name to avoid schema conflicts
+	collName := fmt.Sprintf("%s_%d", BaseCollectionName, dimension)
+
+	return &MilvusClient{
+		client:    c,
+		dimension: dimension,
+		collName:  collName,
+	}, nil
 }
 
 func (m *MilvusClient) Close() {
@@ -66,9 +75,9 @@ func (m *MilvusClient) AddChunks(chunks []Chunk) error {
 	documentIDCol := entity.NewColumnInt64("document_id", documentIDs)
 	chunkIndexCol := entity.NewColumnInt64("chunk_index", chunkIndices)
 	chunkTextCol := entity.NewColumnVarChar("chunk_text", chunkTexts)
-	embeddingCol := entity.NewColumnFloatVector("embedding", Dim, embeddings)
+	embeddingCol := entity.NewColumnFloatVector("embedding", m.dimension, embeddings)
 
-	_, err := m.client.Insert(ctx, CollectionName, "", documentIDCol, chunkIndexCol, chunkTextCol, embeddingCol)
+	_, err := m.client.Insert(ctx, m.collName, "", documentIDCol, chunkIndexCol, chunkTextCol, embeddingCol)
 	if err != nil {
 		return fmt.Errorf("failed to insert chunks: %w", err)
 	}
@@ -89,7 +98,7 @@ func (m *MilvusClient) Search(queryVector []float32, limit int, minScore float64
 
 	searchResult, err := m.client.Search(
 		ctx,
-		CollectionName,
+		m.collName,
 		[]string{},
 		"",
 		[]string{"document_id", "chunk_text"},
@@ -164,14 +173,14 @@ func (m *MilvusClient) EnsureCollections() error {
 }
 
 func (m *MilvusClient) ensureChunksCollection(ctx context.Context) error {
-	has, err := m.client.HasCollection(ctx, CollectionName)
+	has, err := m.client.HasCollection(ctx, m.collName)
 	if err != nil {
 		return fmt.Errorf("failed to check collection existence: %w", err)
 	}
 
 	if !has {
 		schema := &entity.Schema{
-			CollectionName: CollectionName,
+			CollectionName: m.collName,
 			Description:    "Document chunks for RAG",
 			AutoID:         true,
 			Fields: []*entity.Field{
@@ -200,7 +209,7 @@ func (m *MilvusClient) ensureChunksCollection(ctx context.Context) error {
 					Name:     "embedding",
 					DataType: entity.FieldTypeFloatVector,
 					TypeParams: map[string]string{
-						entity.TypeParamDim: fmt.Sprintf("%d", Dim),
+						entity.TypeParamDim: fmt.Sprintf("%d", m.dimension),
 					},
 				},
 			},
@@ -216,12 +225,12 @@ func (m *MilvusClient) ensureChunksCollection(ctx context.Context) error {
 			return fmt.Errorf("failed to create index definition: %w", err)
 		}
 
-		if err := m.client.CreateIndex(ctx, CollectionName, "embedding", idx, false); err != nil {
+		if err := m.client.CreateIndex(ctx, m.collName, "embedding", idx, false); err != nil {
 			return fmt.Errorf("failed to create index: %w", err)
 		}
 
 		// Load collection
-		if err := m.client.LoadCollection(ctx, CollectionName, false); err != nil {
+		if err := m.client.LoadCollection(ctx, m.collName, false); err != nil {
 			return fmt.Errorf("failed to load collection: %w", err)
 		}
 	}
@@ -432,7 +441,7 @@ func (m *MilvusClient) DeleteDocument(id int64) error {
 	}
 
 	// Delete chunks
-	if err := m.client.Delete(ctx, CollectionName, "", fmt.Sprintf("document_id == %d", id)); err != nil {
+	if err := m.client.Delete(ctx, m.collName, "", fmt.Sprintf("document_id == %d", id)); err != nil {
 		return fmt.Errorf("failed to delete chunks: %w", err)
 	}
 

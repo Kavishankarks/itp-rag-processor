@@ -29,7 +29,7 @@ conversion_service = None
 async def lifespan(app: FastAPI):
     # Startup: Initialize services
     global embedding_service, search_service, normalize_service, conversion_service
-    model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    model_name = os.getenv("EMBEDDING_MODEL")
     embedding_service = EmbeddingService(model_name)
     search_service = get_search_service()
     normalize_service = get_normalize_service()
@@ -63,6 +63,7 @@ app.add_middleware(
 # Request/Response models
 class EmbeddingRequest(BaseModel):
     texts: List[str]
+    model: str = None  # Optional model override
 
 
 class EmbeddingResponse(BaseModel):
@@ -158,11 +159,11 @@ async def generate_embeddings(request: EmbeddingRequest):
         raise HTTPException(status_code=400, detail="No texts provided")
 
     try:
-        embeddings = embedding_service.encode(request.texts)
+        embeddings = embedding_service.encode(request.texts, model=request.model)
         return EmbeddingResponse(
             embeddings=embeddings,
-            model=embedding_service.model_name,
-            dimension=embedding_service.dimension,
+            model=request.model or embedding_service.model_name,
+            dimension=len(embeddings[0]) if embeddings else embedding_service.dimension,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate embeddings: {str(e)}")

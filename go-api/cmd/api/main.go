@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -75,7 +76,15 @@ func main() {
 		log.Fatal("MILVUS_URL and MILVUS_TOKEN environment variables are required")
 	}
 
-	milvusClient, err := vector.Initialize(milvusURL, milvusToken)
+	// Get embedding dimension from env or use default
+	embeddingDimV := os.Getenv("EMBEDDING_DIMENSION")
+	embeddingDim := 1536 // Default for text-embedding-3-small
+	if embeddingDimV != "" {
+		fmt.Sscanf(embeddingDimV, "%d", &embeddingDim)
+	}
+	log.Printf("Using embedding dimension: %d", embeddingDim)
+
+	milvusClient, err := vector.Initialize(milvusURL, milvusToken, embeddingDim)
 	if err != nil {
 		log.Fatal("Failed to initialize Milvus client:", err)
 	}
@@ -143,8 +152,8 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s", port)
-	log.Printf("swagger docs at http://localhost:{port}/swagger/index.html")
-	log.Printf("swagger redoc at http://localhost:{port}/swagger/redoc")
+	log.Printf("swagger docs at http://localhost:%s/swagger/index.html", port)
+	log.Printf("swagger redoc at http://localhost:%s/swagger/redoc", port)
 	if err := app.Listen(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}

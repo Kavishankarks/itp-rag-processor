@@ -18,6 +18,7 @@ type EmbeddingClient struct {
 
 type EmbeddingRequest struct {
 	Texts []string `json:"texts"`
+	Model string   `json:"model,omitempty"`
 }
 
 type EmbeddingResponse struct {
@@ -75,7 +76,10 @@ func NewClient() *EmbeddingClient {
 
 // GetEmbeddings retrieves embeddings for the given texts
 func (c *EmbeddingClient) GetEmbeddings(texts []string) ([][]float32, error) {
-	reqBody := EmbeddingRequest{Texts: texts}
+	reqBody := EmbeddingRequest{
+		Texts: texts,
+		Model: "text-embedding-3-small", // Default to OpenAI small model
+	}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
